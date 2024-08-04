@@ -1,118 +1,202 @@
-import Image from "next/image";
-import { Inter } from "next/font/google";
-
-const inter = Inter({ subsets: ["latin"] });
+import React, { useState, useEffect } from 'react';
+import { db } from './firebase'; 
+import { collection, addDoc, getDocs, updateDoc, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { 
+  Box, 
+  Button, 
+  Container, 
+  Grid, 
+  MenuItem, 
+  Select, 
+  TextField, 
+  Typography, 
+  IconButton,
+  InputLabel,
+  FormControl 
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 export default function Home() {
+  const [itemName, setItemName] = useState('');
+  const [itemQuantity, setItemQuantity] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCategory, setSearchCategory] = useState('');
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      const querySnapshot = await getDocs(collection(db, 'items'));
+      const itemsList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setItems(itemsList);
+    };
+
+    fetchItems();
+  }, []);
+
+  const handleCategoryChange = (event) => {
+    setSelectedCategory(event.target.value);
+  };
+
+  const handleAddItem = async (event) => {
+    event.preventDefault();
+    if (itemName && itemQuantity && selectedCategory) {
+      const itemRef = collection(db, 'items');
+      const q = query(itemRef, where('name', '==', itemName.trim()));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const existingItem = querySnapshot.docs[0];
+        const existingQuantity = parseInt(existingItem.data().quantity, 10);
+        const newQuantity = existingQuantity + parseInt(itemQuantity, 10);
+        await updateDoc(doc(db, 'items', existingItem.id), { quantity: newQuantity.toString() });
+        setItems(items.map(item => 
+          item.id === existingItem.id ? { ...item, quantity: newQuantity.toString() } : item
+        ));
+        console.log('Item quantity updated:', { name: itemName.trim(), quantity: newQuantity.toString() });
+      } else {
+        const newItem = { name: itemName.trim(), quantity: itemQuantity.trim(), category: selectedCategory };
+        const docRef = await addDoc(itemRef, newItem);
+        setItems([...items, { id: docRef.id, ...newItem }]);
+        console.log('Item added to Firestore:', newItem);
+      }
+
+      setItemName('');
+      setItemQuantity('');
+      setSelectedCategory('');
+    }
+  };
+
+  const handleDeleteItem = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'items', id));
+      setItems(items.filter(item => item.id !== id));
+      console.log('Item deleted:', id);
+    } catch (error) {
+      console.error('Error deleting document:', error);
+    }
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleSearchCategoryChange = (event) => {
+    setSearchCategory(event.target.value);
+  };
+
+  const filteredItems = items.filter(item =>
+    (item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.quantity.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    (searchCategory === '' || item.category === searchCategory)
+  );
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">pages/index.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+    <Container maxWidth="md">
+      <Box mt={4} mb={4} textAlign="center">
+        <Typography variant="h4">Pantry Inventory Management App</Typography>
+      </Box>
+      <Box component="form" onSubmit={handleAddItem} mb={4}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Enter item"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
             />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <TextField
+              fullWidth
+              label="Enter quantity"
+              value={itemQuantity}
+              onChange={(e) => setItemQuantity(e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <FormControl fullWidth>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={selectedCategory}
+                onChange={handleCategoryChange}
+                label="Category"
+              >
+                <MenuItem value=""><em>Select category</em></MenuItem>
+                <MenuItem value="fruits">Fruits</MenuItem>
+                <MenuItem value="vegetables">Vegetables</MenuItem>
+                <MenuItem value="grains">Grains</MenuItem>
+                <MenuItem value="dairy">Dairy</MenuItem>
+                <MenuItem value="meat">Meat</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <Button 
+              type="submit" 
+              fullWidth 
+              variant="contained" 
+              color="primary"
+            >
+              Add item
+            </Button>
+          </Grid>
+        </Grid>
+      </Box>
+      <Box mb={4}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={8}>
+            <TextField
+              fullWidth
+              label="Search items..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={searchCategory}
+                onChange={handleSearchCategoryChange}
+                label="Category"
+              >
+                <MenuItem value=""><em>All categories</em></MenuItem>
+                <MenuItem value="fruits">Fruits</MenuItem>
+                <MenuItem value="vegetables">Vegetables</MenuItem>
+                <MenuItem value="grains">Grains</MenuItem>
+                <MenuItem value="dairy">Dairy</MenuItem>
+                <MenuItem value="meat">Meat</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </Box>
+      <Box>
+        <Grid container spacing={2}>
+          {filteredItems.map((item) => (
+            <Grid item xs={12} key={item.id}>
+              <Box display="flex" alignItems="center" p={2} borderBottom={1}>
+                <Box flexGrow={1}>
+                  <Typography variant="body1"><strong>{item.name}</strong></Typography>
+                  <Typography variant="body2">Quantity: {item.quantity}</Typography>
+                  <Typography variant="body2">Category: {item.category}</Typography>
+                </Box>
+                <IconButton
+                  color="secondary"
+                  onClick={() => handleDeleteItem(item.id)}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    </Container>
   );
 }
